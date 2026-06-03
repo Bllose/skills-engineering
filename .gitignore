@@ -1,0 +1,13 @@
+# Ignore everything by default
+/*
+
+# Except these skill folders
+!/diagnose/
+!/grill-with-docs/
+!/improve-codebase-architecture/
+!/tdd/
+!/to-prd/
+!/zoom-out/
+
+# Also track the .gitignore itself
+!.gitignore
