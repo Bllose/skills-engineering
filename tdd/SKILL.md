@@ -1,109 +1,93 @@
 ---
 name: tdd
-description: Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
+description: 基于 red-green-refactor 循环的测试驱动开发。适用于用户要落地功能、修复BUG并采用TDD、提及 red-green-refactor、需要集成测试或优先测试再编码的场景。
 ---
 
-# Test-Driven Development
+# Test-Driven Development（测试驱动开发）
 
-## Philosophy
+## 设计理念
+**核心原则**：用公共 interface 校验业务行为，而非内部实现细节。内部代码可整体重构，但测试用例不应因此失效。
 
-**Core principle**: Tests should verify behavior through public interfaces, not implementation details. Code can change entirely; tests shouldn't.
+**优质用例**偏向集成测试风格：通过对外公共 API 走真实业务链路，描述系统**能做什么**，而非**如何实现**。优质用例可读性等同于需求规约，例如「用户可用有效购物车完成结算」，直观体现系统能力。这类用例不受重构影响，和内部代码结构解耦。
 
-**Good tests** are integration-style: they exercise real code paths through public APIs. They describe _what_ the system does, not _how_ it does it. A good test reads like a specification - "user can checkout with valid cart" tells you exactly what capability exists. These tests survive refactors because they don't care about internal structure.
+**劣质用例**和实现强耦合：Mock 内部协作对象、测试私有方法、绕过接口直连数据库校验数据。判别特征：业务逻辑没变、仅重构内部代码就导致用例报错；修改内部私有函数引发用例失败，说明用例在测实现而非业务行为。
 
-**Bad tests** are coupled to implementation. They mock internal collaborators, test private methods, or verify through external means (like querying a database directly instead of using the interface). The warning sign: your test breaks when you refactor, but behavior hasn't changed. If you rename an internal function and tests fail, those tests were testing implementation, not behavior.
+示例参考 [tests.md](tests.md)，Mock 规范参考 [mocking.md](mocking.md)。
 
-See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking guidelines.
+## 反模式：横向分层开发
+**禁止先一次性写完所有用例，再批量实现业务代码**，该方式称为横向切片：把 RED 阶段等同于全量编写用例、GREEN 阶段等同于全量编码落地。
 
-## Anti-Pattern: Horizontal Slices
+该写法产出劣质用例，弊端如下：
+- 批量编写的用例基于脑补逻辑，而非真实业务表现
+- 测试聚焦数据结构、函数签名这类代码形态，而非面向使用者的业务能力
+- 用例灵敏度异常：业务出错但用例全过、业务正常却用例报错
+- 提前锁定用例结构，后续编码发现需求变动时难以修正
 
-**DO NOT write all tests first, then all implementation.** This is "horizontal slicing" - treating RED as "write all tests" and GREEN as "write all code."
-
-This produces **crap tests**:
-
-- Tests written in bulk test _imagined_ behavior, not _actual_ behavior
-- You end up testing the _shape_ of things (data structures, function signatures) rather than user-facing behavior
-- Tests become insensitive to real changes - they pass when behavior breaks, fail when behavior is fine
-- You outrun your headlights, committing to test structure before understanding the implementation
-
-**Correct approach**: Vertical slices via tracer bullets. One test → one implementation → repeat. Each test responds to what you learned from the previous cycle. Because you just wrote the code, you know exactly what behavior matters and how to verify it.
-
+**正确做法**：纵向切片、探针式迭代。单条用例→单段实现→循环往复。每条用例依托上一轮编码获得的认知编写，写完实现后能精准确定核心校验点。
 ```
-WRONG (horizontal):
+错误写法（横向）：
   RED:   test1, test2, test3, test4, test5
   GREEN: impl1, impl2, impl3, impl4, impl5
 
-RIGHT (vertical):
+正确写法（纵向）：
   RED→GREEN: test1→impl1
   RED→GREEN: test2→impl2
   RED→GREEN: test3→impl3
   ...
 ```
 
-## Workflow
+## 执行流程
+### 1. 前期规划
+梳理代码时遵循项目领域术语，保证用例命名、接口用词和项目规范统一，同时遵从对应模块的 ADR 决策。
 
-### 1. Planning
+编码前置确认事项：
+- [ ] 和用户确认需要改动的 interface
+- [ ] 和用户确认待测业务行为并划分优先级
+- [ ] 寻找可改造为 [deep modules](deep-modules.md) 的点位（精简接口、复杂实现内收）
+- [ ] 基于 [interface-design.md](interface-design.md) 设计可测试接口
+- [ ] 罗列待验证的业务行为（只写行为，不罗列实现步骤）
+- [ ] 方案经用户确认后启动开发
 
-When exploring the codebase, use the project's domain glossary so that test names and interface vocabulary match the project's language, and respect ADRs in the area you're touching.
+确认问题：「对外公共 interface 该如何定义？优先级最高的待测行为是哪些？」
 
-Before writing any code:
+**无需全覆盖测试**，和用户锁定核心校验范围；测试资源倾斜关键链路与复杂逻辑，不必穷尽所有边界场景。
 
-- [ ] Confirm with user what interface changes are needed
-- [ ] Confirm with user which behaviors to test (prioritize)
-- [ ] Identify opportunities for [deep modules](deep-modules.md) (small interface, deep implementation)
-- [ ] Design interfaces for [testability](interface-design.md)
-- [ ] List the behaviors to test (not implementation steps)
-- [ ] Get user approval on the plan
-
-Ask: "What should the public interface look like? Which behaviors are most important to test?"
-
-**You can't test everything.** Confirm with the user exactly which behaviors matter most. Focus testing effort on critical paths and complex logic, not every possible edge case.
-
-### 2. Tracer Bullet
-
-Write ONE test that confirms ONE thing about the system:
-
+### 2. 探针试点
+仅编写**一条用例**，只校验一项业务：
 ```
-RED:   Write test for first behavior → test fails
-GREEN: Write minimal code to pass → test passes
+RED:   编写首个行为用例 → 用例失败
+GREEN: 编写最简代码让用例通过 → 用例成功
 ```
+本轮即探针验证，打通端到端最小可用链路。
 
-This is your tracer bullet - proves the path works end-to-end.
-
-### 3. Incremental Loop
-
-For each remaining behavior:
-
+### 3. 增量迭代循环
+剩余业务逐个迭代：
 ```
-RED:   Write next test → fails
-GREEN: Minimal code to pass → passes
+RED:   编写下一条用例 → 用例失败
+GREEN: 最简编码满足当前用例 → 用例成功
 ```
 
-Rules:
+迭代约束：
+- 一次只新增一条用例
+- 仅编写满足当前用例的最少代码
+- 不提前预留未来功能代码
+- 用例只校验可观测的业务表现
 
-- One test at a time
-- Only enough code to pass current test
-- Don't anticipate future tests
-- Keep tests focused on observable behavior
+### 4. 重构优化
+全量用例通过后，参照 [refactoring.md](refactoring.md) 梳理重构项：
+- [ ] 抽取重复代码
+- [ ] 深化 module：把复杂逻辑收拢到精简 interface 后方
+- [ ] 在合适场景落地 SOLID 设计原则
+- [ ] 结合新增代码复盘存量代码问题
+- [ ] 每步重构后执行全量用例
 
-### 4. Refactor
+**禁止在用例失败（RED）阶段重构，必须先达成 GREEN 状态。**
 
-After all tests pass, look for [refactor candidates](refactoring.md):
-
-- [ ] Extract duplication
-- [ ] Deepen modules (move complexity behind simple interfaces)
-- [ ] Apply SOLID principles where natural
-- [ ] Consider what new code reveals about existing code
-- [ ] Run tests after each refactor step
-
-**Never refactor while RED.** Get to GREEN first.
-
-## Checklist Per Cycle
-
+## 单轮迭代检查清单
 ```
-[ ] Test describes behavior, not implementation
-[ ] Test uses public interface only
-[ ] Test would survive internal refactor
-[ ] Code is minimal for this test
-[ ] No speculative features added
+[ ] 用例描述业务行为，不绑定内部实现
+[ ] 仅通过公共 interface 执行校验
+[ ] 内部代码重构不会导致用例失效
+[ ] 实现代码刚好满足当前用例，无冗余
+[ ] 不超前编写未规划的功能代码
 ```
