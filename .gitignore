@@ -8,6 +8,7 @@
 !/tdd/
 !/to-prd/
 !/zoom-out/
+!/karpathy-guidelines/
 
 # Also track root-level files
 !.gitignore
