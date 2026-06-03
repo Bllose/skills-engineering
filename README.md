@@ -1,0 +1,170 @@
+# Skills Engineering
+
+Claude Code 自定义技能集，覆盖软件工程全流程：需求评审、架构优化、TDD 开发、故障排查、PRD 生成。
+
+## 技能清单
+
+| 技能 | 入口 | 用途 |
+|---|---|---|
+| **diagnose** | `/diagnose` | 疑难 Bug 与性能退化标准化排查：复现→猜想→埋点→修复→回归 |
+| **grill-with-docs** | `/grill-with-docs` | 以"拷问式"评审对技术方案进行压力测试，对照 CONTEXT.md 打磨术语，落地 ADR |
+| **improve-codebase-architecture** | `/improve-codebase-architecture` | 挖掘架构优化切入点，将浅层 Module 改造为深层 Module，提升可测试性与 AI 可读性 |
+| **tdd** | `/tdd` | Red-Green-Refactor 循环的测试驱动开发，纵向切片、探针式迭代 |
+| **to-prd** | `/to-prd` | 基于当前会话上下文生成 PRD，发布至项目需求看板 |
+| **zoom-out** | `/zoom-out` | 提升抽象层级，从架构视角梳理模块与调用方关系 |
+
+## 技能分类与部署建议
+
+Claude Code 支持两种技能部署位置：
+
+| 部署位置 | 路径 | 作用域 |
+|---|---|---|
+| **全局** | `~/.claude/skills/` | 所有项目均可调用 |
+| **项目** | `<project>/.claude/skills/` | 仅当前项目可调用 |
+
+### 适合全局部署
+
+这类技能提供通用工程方法论，不依赖特定项目的文档或代码结构，放在全局目录下跨项目复用：
+
+- **diagnose** — 标准化排查流程（复现→猜想→埋点→修复），与具体项目解耦。附带 `scripts/hitl-loop.template.sh` 用于人工介入的循环复现场景。
+- **zoom-out** — 纯粹的行为指令（`disable-model-invocation: true`），指示代理切换抽象层级，零项目依赖。
+
+部署方式：
+
+```bash
+# 将技能目录复制到全局 skills 目录
+cp -r diagnose ~/.claude/skills/
+cp -r zoom-out ~/.claude/skills/
+```
+
+### 适合项目级部署
+
+这类技能深度依赖项目自身的领域文档（CONTEXT.md）和架构决策记录（docs/adr/），放在目标项目内才能发挥完整能力：
+
+- **grill-with-docs** — 直接读写项目内的 `CONTEXT.md` 和 `docs/adr/`，是项目领域知识的"校对器"。
+- **improve-codebase-architecture** — 依托项目的 CONTEXT.md 术语和 ADR 决策来挖掘优化点，术语体系与项目绑定。
+- **tdd** — 用例命名、接口设计需对齐项目领域术语和 ADR 决策；TDD 方法论本身通用，但高质量产出依赖项目上下文。
+- **to-prd** — PRD 全文需使用项目 CONTEXT.md 术语，遵从对应模块的 ADR 决策。
+
+部署方式：
+
+```bash
+# 将技能目录复制到目标项目的 .claude/skills/ 下
+cp -r grill-with-docs ~/my-project/.claude/skills/
+cp -r improve-codebase-architecture ~/my-project/.claude/skills/
+cp -r tdd ~/my-project/.claude/skills/
+cp -r to-prd ~/my-project/.claude/skills/
+```
+
+### 灵活部署
+
+部分技能同时适合两种位置，取决于使用习惯：
+
+- **diagnose** 和 **tdd**：方法论本身是通用的，放在全局即可跨项目使用；若希望诊断报告/测试用例的命名严格对齐某项目的领域术语，也可额外放在该项目下。
+- **to-prd**：如果所有项目共用同一套需求看板配置，全局一份即可；若不同项目看板配置不同，则按项目部署。
+
+### 前置依赖
+
+以下技能在调用前，目标项目需要具备对应文件：
+
+| 技能 | 依赖项 | 说明 |
+|---|---|---|
+| grill-with-docs | `CONTEXT.md`、`docs/adr/` | 懒加载创建——首次使用时会自动新建 |
+| improve-codebase-architecture | `CONTEXT.md`、`docs/adr/` | 读取现有文档作为优化参照 |
+| tdd | `CONTEXT.md`（可选） | 有则对齐术语，无则按通用方式执行 |
+| to-prd | 需求看板配置 | 缺失时执行 `/setup-matt-pocock-skills` 完成配置 |
+
+### 部署后的目录结构示例
+
+全局部署后：
+
+```
+~/.claude/skills/
+├── diagnose/
+│   ├── SKILL.md
+│   └── scripts/
+│       └── hitl-loop.template.sh
+└── zoom-out/
+    └── SKILL.md
+```
+
+项目级部署后：
+
+```
+my-project/
+├── .claude/
+│   └── skills/
+│       ├── grill-with-docs/
+│       │   ├── SKILL.md
+│       │   ├── CONTEXT-FORMAT.md
+│       │   └── ADR-FORMAT.md
+│       ├── improve-codebase-architecture/
+│       │   ├── SKILL.md
+│       │   ├── LANGUAGE.md
+│       │   ├── DEEPENING.md
+│       │   ├── INTERFACE-DESIGN.md
+│       │   └── HTML-REPORT.md
+│       ├── tdd/
+│       │   ├── SKILL.md
+│       │   ├── deep-modules.md
+│       │   ├── interface-design.md
+│       │   ├── mocking.md
+│       │   ├── refactoring.md
+│       │   └── tests.md
+│       └── to-prd/
+│           └── SKILL.md
+├── CONTEXT.md          # grill-with-docs 首次运行时懒加载创建
+└── docs/
+    └── adr/            # 首次写入 ADR 时懒加载创建
+```
+
+## 关联关系
+
+技能之间存在协作链路：
+
+```
+zoom-out（梳理架构全貌）
+    ↓
+grill-with-docs（评审方案、打磨术语、落地 ADR）
+    ↓
+improve-codebase-architecture（基于术语与决策挖掘优化点）
+    ↓
+tdd（在优化后的架构上 TDD 开发）
+    ↓
+diagnose（上线后故障排查 → 复盘时反馈给架构优化）
+    ↓
+to-prd（排查结论或新需求沉淀为 PRD）
+```
+
+## 仓库结构
+
+```
+skills-engineering/
+├── diagnose/                        # 故障排查
+│   ├── SKILL.md
+│   └── scripts/
+│       └── hitl-loop.template.sh    # 人工介入循环复现脚本模板
+├── grill-with-docs/                 # 方案评审 & 文档打磨
+│   ├── SKILL.md
+│   ├── CONTEXT-FORMAT.md            # CONTEXT.md 编写规范
+│   └── ADR-FORMAT.md                # ADR 文档编写规范
+├── improve-codebase-architecture/   # 架构优化
+│   ├── SKILL.md
+│   ├── LANGUAGE.md                  # 统一架构术语规范
+│   ├── DEEPENING.md                 # 模块深度改造规范
+│   ├── INTERFACE-DESIGN.md          # 接口设计方案
+│   └── HTML-REPORT.md               # HTML 报告格式规范
+├── tdd/                             # 测试驱动开发
+│   ├── SKILL.md
+│   ├── deep-modules.md              # 深层模块设计规范
+│   ├── interface-design.md          # 面向可测试性的接口设计
+│   ├── mocking.md                   # Mock 使用规范
+│   ├── refactoring.md               # 重构候选项清单
+│   └── tests.md                     # 优劣用例区分规范
+├── to-prd/                          # PRD 生成
+│   └── SKILL.md
+├── zoom-out/                        # 抽象层级提升
+│   └── SKILL.md
+├── .gitignore
+└── README.md
+```

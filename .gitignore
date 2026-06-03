@@ -9,5 +9,6 @@
 !/to-prd/
 !/zoom-out/
 
-# Also track the .gitignore itself
+# Also track root-level files
 !.gitignore
+!README.md
